@@ -41,9 +41,33 @@ main{padding:12px 12px calc(90px + env(safe-area-inset-bottom));max-width:640px;
 .seg{display:flex;background:var(--line);border-radius:9px;padding:2px;margin:0 0 14px}
 .seg button{flex:1;border:0;background:none;padding:8px;border-radius:7px;font-size:14px;font-weight:600}
 .seg button.on{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.15)}
-.amount{display:flex;align-items:center;padding:8px 16px;gap:6px}
-.amount span{font-size:28px;font-weight:700;color:var(--muted)}
-.amount input{flex:1;border:0;background:none;font-size:38px;font-weight:700;outline:none;width:100%;font-variant-numeric:tabular-nums}
+main.entry-mode{padding:0 0 calc(57px + env(safe-area-inset-bottom));max-width:640px}
+.entry{display:flex;flex-direction:column;min-height:calc(100dvh - 50px - 57px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+.entry .banner{margin:10px 12px 0}
+.pills{display:flex;justify-content:space-around;padding:18px 12px 4px}
+.pill{border:0;border-radius:24px;padding:10px 30px;background:var(--line);color:var(--muted);font-weight:600;font-size:17px;min-height:44px}
+.pill.on{background:#46c252;color:#fff}
+.disp{flex:1;display:flex;flex-direction:column;justify-content:center;padding:6px 20px 10px;min-height:120px}
+.disp .expr{text-align:right;color:var(--muted);font-size:18px;min-height:26px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.val{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.cur{font-weight:700;font-size:22px;line-height:1.05;text-align:center;flex:none}
+.cur small{display:block;font-size:14px}
+.num{font-size:clamp(44px,15vw,76px);font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.02em}
+.pad{background:#222;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:6px 6px 10px;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.sheet .pad{border-radius:14px}
+.pad>button{border:0;background:none;color:#fff;font-size:34px;font-weight:300;height:clamp(54px,8.6vh,80px);border-radius:12px}
+.pad>button:active{background:rgba(255,255,255,.1)}
+.pad .op{color:#46c252;font-size:36px}
+.pad .bottom{grid-column:1/-1;display:grid;grid-template-columns:1fr 2fr 1fr;align-items:center;gap:6px;padding-top:4px}
+.pad .bottom button{border:0;background:none;color:#46c252}
+.pad .catbtn{font-size:12px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:3px;min-height:56px;justify-content:center}
+.pad .catbtn .badge{width:30px;height:30px;font-size:16px}
+.pad .catbtn span.t{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pad .bottom .next{background:#46c252;color:#fff;border-radius:30px;font-size:22px;font-weight:700;height:58px}
+.pad .bottom .bs{font-size:26px;min-height:56px}
+.dtl-amt{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;background:var(--card);border-radius:12px;padding:14px 18px;margin:0 0 14px;gap:12px}
+.dtl-amt .num{font-size:clamp(40px,13vw,64px)}
+textarea.memo{width:100%;border:0;background:none;outline:none;resize:vertical;min-height:96px;font-size:16px;line-height:1.5}
 input[type=date],select{border:0;background:var(--bg);border-radius:8px;padding:6px 8px;min-height:36px}
 input.plain{border:0;background:none;outline:none;width:100%;padding:0;min-height:30px}
 .primary{display:block;width:100%;border:0;background:var(--accent);color:#fff;font-weight:700;padding:14px;border-radius:12px;font-size:17px;margin:4px 0 12px}
@@ -262,18 +286,79 @@ function shead(title, right = '', left = '閉じる', leftAct = 'closeSheet') {
   return `<div class="shead"><button data-act="${leftAct}">${left}</button><div class="t">${title}</div>${right || '<span class="sp"></span>'}</div>`;
 }
 
-/* ========== 記録フォーム ========== */
-function formHTML(f, key) {
+/* ========== 電卓（金額入力） ========== */
+const calc = { tab: { expr: '' }, edit: { expr: '' } };
+const OPS = '+-×÷';
+const isOp = ch => !!ch && OPS.includes(ch);
+function evalExpr(e) {
+  const t = (e || '').match(/\d+\.?\d*|\.\d+|[+\-×÷]/g) || [];
+  while (t.length && isOp(t[t.length - 1])) t.pop();
+  if (!t.length) return 0;
+  const st = [parseFloat(t[0])], ops = [];
+  for (let i = 1; i < t.length; i += 2) {
+    const op = t[i], n = parseFloat(t[i + 1]);
+    if (op === '×') st[st.length - 1] *= n;
+    else if (op === '÷') st[st.length - 1] = n === 0 ? NaN : st[st.length - 1] / n;
+    else { ops.push(op); st.push(n); }
+  }
+  let v = st[0];
+  ops.forEach((op, i) => { v = op === '+' ? v + st[i + 1] : v - st[i + 1]; });
+  return v;
+}
+const calcValue = c => Math.round(evalExpr(calc[c].expr));
+function pressKey(c, k) {
+  let e = calc[c].expr; const last = e.slice(-1), cur = e.split(/[+\-×÷]/).pop();
+  if (k === 'bs') e = e.slice(0, -1);
+  else if (isOp(k)) { if (!e) return; e = (isOp(last) || last === '.') ? e.slice(0, -1) + k : e + k; }
+  else if (k === '.') { if (cur.includes('.')) return; e += cur === '' ? '0.' : '.'; }
+  else if (cur === '0') { if (k === '0' || k === '00') return; e = e.slice(0, -1) + k; }
+  else if (cur === '' && k === '00') e += '0';
+  else e += k;
+  if (e.replace(/[^0-9]/g, '').length > 14) return;
+  calc[c].expr = e;
+}
+const fmtNum = s => { const [i, d] = s.split('.'); const ii = (i || '0').replace(/\B(?=(\d{3})+(?!\d))/g, ','); return d !== undefined ? ii + '.' + d : ii; };
+const fmtExpr = e => e.replace(/\d+\.?\d*/g, fmtNum);
+function dispHTML(c, kind) {
+  const e = calc[c].expr, hasOp = /[+\-×÷]/.test(e), v = calcValue(c);
+  const big = hasOp ? (isFinite(v) ? v.toLocaleString('ja-JP') : 'エラー') : (e ? fmtNum(e) : '0');
+  return `<div class="disp"><div class="expr">${hasOp ? esc(fmtExpr(e)) + ' =' : ''}</div><div class="val"><div class="cur">¥<small>JPY</small></div><div class="num ${kind === 'income' ? 'inc' : ''}">${big}</div></div></div>`;
+}
+function padHTML(c) {
+  const k = (v, cls = '', label = v) => `<button class="${cls}" data-act="key" data-c="${c}" data-k="${v}">${label}</button>`;
+  let bottom;
+  if (c === 'tab') {
+    const cat = getCat(forms.tab.catId), sub = getSub(cat, forms.tab.subId);
+    bottom = `<button class="catbtn" data-act="calcCat">${cat ? badge(cat) : '<span style="font-size:24px">🗂️</span>'}<span class="t">${cat ? esc(sub ? sub.name : cat.name) : 'カテゴリ選択'}</span></button>
+      <button class="next" data-act="calcNext">次へ</button>`;
+  } else {
+    bottom = `<button class="catbtn" data-act="closeSheet">キャンセル</button><button class="next" data-act="calcDone">決定</button>`;
+  }
+  return `<div class="pad">
+    ${k('7')}${k('8')}${k('9')}${k('÷', 'op')}
+    ${k('4')}${k('5')}${k('6')}${k('×', 'op')}
+    ${k('1')}${k('2')}${k('3')}${k('-', 'op', '−')}
+    ${k('00')}${k('0')}${k('.')}${k('+', 'op')}
+    <div class="bottom">${bottom}<button class="bs" data-act="key" data-c="${c}" data-k="bs" aria-label="1文字消す（長押しで全消去）">⌫</button></div>
+  </div>`;
+}
+
+/* ========== 詳細入力（カテゴリ・日付・メモ） ========== */
+function detailHTML(f, key) {
   const c = getCat(f.catId), s = getSub(c, f.subId);
-  return `<div class="seg">${['expense', 'income'].map(k => `<button class="${f.kind === k ? 'on' : ''}" data-act="fKind" data-form="${key}" data-v="${k}">${KIND[k]}</button>`).join('')}</div>
-  <div class="card amount"><span>¥</span><input inputmode="numeric" pattern="[0-9]*" placeholder="0" value="${esc(f.amount)}" data-bind="amount" data-form="${key}" aria-label="金額"></div>
+  return `${f.id ? `<div class="seg">${['expense', 'income'].map(k => `<button class="${f.kind === k ? 'on' : ''}" data-act="fKind" data-form="${key}" data-v="${k}">${KIND[k]}</button>`).join('')}</div>` : ''}
+  <button class="dtl-amt" data-act="${key === 'tab' ? 'closeSheet' : 'editAmount'}" aria-label="金額を変更"><span class="cur">¥<small>JPY</small></span><span class="num ${f.kind === 'income' ? 'inc' : ''}">${Number(f.amount || 0).toLocaleString('ja-JP')}</span></button>
   <div class="card">
-    <button class="row" data-act="fCat" data-form="${key}">${c ? badge(c) : '<span class="badge empty"></span>'}<div class="grow"><div>${c ? esc(c.name) : '<span class="muted">カテゴリを選択</span>'}</div>${s ? `<div class="sub">${esc(s.name)}</div>` : ''}</div><span class="chev">›</span></button>
-    <label class="row"><span class="grow">日付</span><input type="date" value="${esc(f.date)}" data-bind="date" data-form="${key}"></label>
-    <div class="row"><input class="plain" placeholder="メモ（任意）" value="${esc(f.memo)}" data-bind="memo" data-form="${key}"></div>
+    <button class="row" data-act="fCat" data-form="${key}">${c ? badge(c) : '<span class="badge empty"></span>'}<div class="grow">${KIND[f.kind]} &gt; ${c ? esc(c.name) : '<span class="muted">カテゴリを選択</span>'}${s ? ' &gt; ' + esc(s.name) : ''}</div><span class="chev">›</span></button>
+    <label class="row"><span class="badge" style="background:var(--line)">📅</span><span class="grow">日付</span><input type="date" value="${esc(f.date)}" data-bind="date" data-form="${key}"></label>
   </div>
+  <div class="label">メモ（詳細）</div>
+  <div class="card" style="padding:10px 14px"><textarea class="memo" placeholder="例：おにぎり、豆乳" data-bind="memo" data-form="${key}">${esc(f.memo)}</textarea></div>
   <button class="primary" data-act="fSave" data-form="${key}">${f.id ? '保存する' : '記録する'}</button>
   ${f.id ? `<button class="danger" data-act="fDelete" data-form="${key}">この記録を削除</button>` : ''}`;
+}
+function openDetail() {
+  openSheet(() => shead(`${KIND[forms.tab.kind]}の詳細`, '', '‹ 戻る') + detailHTML(forms.tab, 'tab'));
 }
 
 /* ========== 各タブ ========== */
@@ -284,7 +369,8 @@ function viewEntry() {
   const days = last ? Math.floor((Date.now() - new Date(last).getTime()) / 864e5) : null;
   if (db.records.length >= 10 && (days === null || days >= 30))
     out += `<div class="banner"><span class="grow">${days === null ? 'まだバックアップがありません。' : `前回のバックアップから${days}日経過しています。`}</span><button data-act="openBackup">バックアップ</button></div>`;
-  return out + formHTML(forms.tab, 'tab');
+  const f = forms.tab;
+  return `<div class="entry">${out}<div class="pills">${['expense', 'income'].map(k => `<button class="pill ${f.kind === k ? 'on' : ''}" data-act="fKind" data-form="tab" data-v="${k}">${KIND[k]}</button>`).join('')}</div>${dispHTML('tab', f.kind)}${padHTML('tab')}</div>`;
 }
 
 function viewHistory() {
@@ -399,6 +485,7 @@ function render() {
   const [fn, title] = VIEWS[ui.tab];
   $('#title').textContent = title;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === ui.tab));
+  $('#main').className = ui.tab === 'entry' ? 'entry-mode' : '';
   $('#main').innerHTML = fn();
 }
 
@@ -448,9 +535,9 @@ function openCatPicker(kind, onPick) {
 function openEditRecord(id) {
   const r = db.records.find(x => x.id === id); if (!r) return;
   forms.edit = { id: r.id, kind: r.kind, amount: String(r.amount), date: r.date, catId: r.catId, subId: r.subId, memo: r.memo || '' };
-  openSheet(() => shead('記録を編集') + formHTML(forms.edit, 'edit') + (r.recId ? `<div class="note">定期支払い「${esc(r.memo)}」から自動で作られた記録です。</div>` : ''));
+  openSheet(() => shead('記録を編集') + detailHTML(forms.edit, 'edit') + (r.recId ? `<div class="note">定期支払い「${esc(r.memo)}」から自動で作られた記録です。</div>` : ''));
 }
-function refresh(key) { if (key === 'tab') render(); else renderSheets(); }
+function refresh() { render(); renderSheets(); }
 
 /* ========== カテゴリ詳細（分析） ========== */
 function openCatDetail(id) {
@@ -662,7 +749,18 @@ const ACT = {
   mNow: () => { ui.month = todayStr().slice(0, 7); render(); },
   histMode: d => { ui.histMode = d.v; render(); },
   selDay: d => { ui.selDay = ui.selDay === d.v ? null : d.v; render(); },
-  addOnDay: d => { forms.tab = { ...newEntryForm(), kind: forms.tab.kind, catId: forms.tab.catId, subId: forms.tab.subId, date: d.v }; ui.tab = 'entry'; render(); window.scrollTo(0, 0); },
+  addOnDay: d => { forms.tab = { ...newEntryForm(), kind: forms.tab.kind, date: d.v }; calc.tab.expr = ''; ui.tab = 'entry'; render(); window.scrollTo(0, 0); toast(`${dayLabel(d.v)}の記録を入力`); },
+  key: d => { pressKey(d.c, d.k); if (d.c === 'tab') render(); else renderSheets(); },
+  calcCat: () => { const f = forms.tab; openCatPicker(f.kind, (c, s) => { f.catId = c; f.subId = s; render(); }); },
+  calcNext: () => {
+    const f = forms.tab, v = calcValue('tab');
+    if (!isFinite(v) || v <= 0) return toast('金額を入力してください');
+    f.amount = String(v); calc.tab.expr = String(v); render();
+    if (f.catId) openDetail();
+    else openCatPicker(f.kind, (c, s) => { f.catId = c; f.subId = s; render(); openDetail(); });
+  },
+  editAmount: () => { calc.edit.expr = String(forms.edit.amount || ''); openSheet(() => shead('金額を変更') + dispHTML('edit', forms.edit.kind) + padHTML('edit')); },
+  calcDone: () => { const v = calcValue('edit'); if (!isFinite(v) || v <= 0) return toast('金額を入力してください'); forms.edit.amount = String(v); closeSheet(); },
   anaKind: d => { ui.anaKind = d.v; render(); },
   catDetail: d => openCatDetail(d.id),
   editRec: d => openEditRecord(d.id),
@@ -683,7 +781,9 @@ const ACT = {
       save(); closeSheet(); render(); toast('保存しました');
     } else {
       db.records.push({ id: uid(), date: f.date, amount, kind: f.kind, catId: f.catId, subId: f.subId, memo: f.memo.trim(), created: Date.now() });
-      save(); f.amount = ''; f.memo = ''; render(); toast(`${yen(amount)} を記録しました`);
+      save();
+      forms.tab = { ...newEntryForm(), kind: f.kind }; calc.tab.expr = '';
+      sheets.length = 0; renderSheets(); render(); toast(`${yen(amount)} を記録しました`);
     }
   },
   fDelete: async d => {
@@ -812,6 +912,25 @@ function onBind(e) {
   if (key === 'rec' && field === 'kind' && getCat(forms.rec.catId)?.kind !== v) { forms.rec.catId = null; forms.rec.subId = null; }
   if (el.dataset.rerender && e.type === 'change') renderSheets();
 }
+let bsTimer = null, bsLong = false;
+document.addEventListener('pointerdown', e => {
+  const b = e.target.closest('[data-k="bs"]'); if (!b) return;
+  bsLong = false;
+  bsTimer = setTimeout(() => { bsLong = true; calc[b.dataset.c].expr = ''; if (b.dataset.c === 'tab') render(); else renderSheets(); }, 550);
+});
+['pointerup', 'pointercancel', 'pointerleave'].forEach(t => document.addEventListener(t, () => clearTimeout(bsTimer)));
+document.addEventListener('click', e => { if (bsLong && e.target.closest('[data-k="bs"]')) { bsLong = false; e.stopPropagation(); e.preventDefault(); } }, true);
+document.addEventListener('keydown', e => {
+  if (ui.tab !== 'entry' || sheets.length || $('#dialog').style.display === 'block') return;
+  if (/^[0-9.]$/.test(e.key)) pressKey('tab', e.key);
+  else if (e.key === '+' || e.key === '-') pressKey('tab', e.key);
+  else if (e.key === '*') pressKey('tab', '×');
+  else if (e.key === '/') { e.preventDefault(); pressKey('tab', '÷'); }
+  else if (e.key === 'Backspace') pressKey('tab', 'bs');
+  else if (e.key === 'Enter') { e.preventDefault(); return ACT.calcNext(); }
+  else return;
+  render();
+});
 document.addEventListener('input', onBind);
 document.addEventListener('change', onBind);
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'newSub') { e.preventDefault(); ACT.subAdd(); } });
