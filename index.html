@@ -74,6 +74,11 @@ input.plain{border:0;background:none;outline:none;width:100%;padding:0;min-heigh
 .ghost{display:block;width:100%;border:0;background:var(--card);color:var(--accent);font-weight:600;padding:14px;border-radius:12px;margin:0 0 12px}
 .danger{display:block;width:100%;border:0;background:var(--card);color:var(--red);padding:14px;border-radius:12px;margin:0 0 12px}
 .amt{font-variant-numeric:tabular-nums;white-space:nowrap}
+.lrow{gap:10px}
+.lrow .badge{width:28px;height:28px;font-size:15px}
+.lrow .amt{flex:none;min-width:5.5em;text-align:right}
+.lrow .lsub{flex:none;max-width:38%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lrow .lmemo{flex:1;min-width:0;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .inc{color:var(--inc)}.neg{color:var(--red)}
 .msw{display:flex;align-items:center;justify-content:space-between;margin:0 0 12px}
 .msw button{border:0;background:none;font-size:28px;color:var(--accent);padding:0 16px;min-height:44px}
@@ -282,6 +287,12 @@ function recRow(r, showDate) {
   const subline = [showDate ? dayLabel(r.date) : null, s && c ? c.name : null, r.memo || null].filter(Boolean).join(' ・ ');
   return `<button class="row" data-act="editRec" data-id="${esc(r.id)}">${badge(c)}<div class="grow"><div>${esc(title)}${r.recId ? '<span class="tag">定期</span>' : ''}</div>${subline ? `<div class="sub">${esc(subline)}</div>` : ''}</div><div class="amt ${r.kind === 'income' ? 'inc' : ''}">${r.kind === 'income' ? '+' : ''}${yen(r.amount)}</div></button>`;
 }
+/* 履歴「一覧」用：金額 → サブカテゴリ → メモ の順で1行に */
+function listRow(r) {
+  const c = getCat(r.catId), s = getSub(c, r.subId);
+  const name = s ? s.name : (c ? c.name : '未分類');
+  return `<button class="row lrow" data-act="editRec" data-id="${esc(r.id)}">${badge(c)}<span class="amt ${r.kind === 'income' ? 'inc' : ''}">${r.kind === 'income' ? '+' : ''}${yen(r.amount)}</span><span class="lsub">${esc(name)}${r.recId ? '<span class="tag">定期</span>' : ''}</span><span class="lmemo">${esc(r.memo || '')}</span></button>`;
+}
 function shead(title, right = '', left = '閉じる', leftAct = 'closeSheet') {
   return `<div class="shead"><button data-act="${leftAct}">${left}</button><div class="t">${title}</div>${right || '<span class="sp"></span>'}</div>`;
 }
@@ -383,7 +394,7 @@ function viewHistory() {
     for (const d of days) {
       const items = recs.filter(r => r.date === d).sort((a, b) => b.created - a.created);
       const exp = sumAmt(items.filter(r => r.kind === 'expense'));
-      out += `<div class="dh"><span>${dayLabel(d)}</span><span>${exp ? yen(exp) : ''}</span></div><div class="card">${items.map(r => recRow(r)).join('')}</div>`;
+      out += `<div class="dh"><span>${dayLabel(d)}</span><span>${exp ? yen(exp) : ''}</span></div><div class="card">${items.map(r => listRow(r)).join('')}</div>`;
     }
     return out;
   }
