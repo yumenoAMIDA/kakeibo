@@ -519,12 +519,28 @@ function ask(msg, { ok = 'OK', danger = false, input = null, sub = '' } = {}) {
 
 /* ========== カテゴリ選択シート ========== */
 let picker = null;
+/* 直近100件（手入力のみ）から、よく使うカテゴリ＋サブカテゴリの組み合わせを上位n件 */
+function favPairs(kind, n = 3) {
+  const recent = db.records.filter(r => r.kind === kind && !r.recId)
+    .sort((a, b) => (b.date + String(b.created || 0).padStart(15, '0')).localeCompare(a.date + String(a.created || 0).padStart(15, '0')))
+    .slice(0, 100);
+  const cnt = new Map();
+  for (const r of recent) {
+    const c = getCat(r.catId); if (!c || c.kind !== kind) continue;
+    const s = getSub(c, r.subId);
+    const k = c.id + '\u0000' + (s ? s.id : '');
+    const e = cnt.get(k) || { c, s, n: 0 }; e.n++; cnt.set(k, e);
+  }
+  return [...cnt.values()].sort((a, b) => b.n - a.n).slice(0, n);
+}
 function openCatPicker(kind, onPick) {
   picker = { kind, cat: null, onPick };
   openSheet(() => {
     if (!picker) return '';
     if (!picker.cat) {
-      return shead('カテゴリ選択') + `<div class="card">${catsOf(picker.kind).map(c => `<button class="row" data-act="pickCat" data-id="${esc(c.id)}">${badge(c)}<div class="grow"><div>${esc(c.name)}</div><div class="sub">${esc(c.subs.map(s => s.name).join(', '))}</div></div><span class="chev">›</span></button>`).join('')}</div>`;
+      const favs = favPairs(picker.kind);
+      const favHTML = favs.length ? `<div class="label">よく使う項目</div><div class="card">${favs.map(({ c, s }) => `<button class="row" data-act="pickFav" data-id="${esc(c.id)}" data-sub="${s ? esc(s.id) : ''}">${badge(c)}<div class="grow"><div>${esc(s ? s.name : c.name)}</div>${s ? `<div class="sub">${esc(c.name)}</div>` : ''}</div></button>`).join('')}</div><div class="label">すべてのカテゴリ</div>` : '';
+      return shead('カテゴリ選択') + favHTML + `<div class="card">${catsOf(picker.kind).map(c => `<button class="row" data-act="pickCat" data-id="${esc(c.id)}">${badge(c)}<div class="grow"><div>${esc(c.name)}</div><div class="sub">${esc(c.subs.map(s => s.name).join(', '))}</div></div><span class="chev">›</span></button>`).join('')}</div>`;
     }
     const c = getCat(picker.cat);
     return shead(esc(c.name), '', '‹ 戻る', 'pickBack') + `<div class="card">${c.subs.map(s => `<button class="row" data-act="pickSub" data-id="${esc(s.id)}"><div class="grow">${esc(s.name)}</div></button>`).join('')}<button class="row" data-act="pickSub" data-id=""><div class="grow muted">サブカテゴリなし</div></button></div>`;
@@ -776,6 +792,7 @@ const ACT = {
   fKind: d => { const f = forms[d.form]; if (f.kind === d.v) return; f.kind = d.v; if (getCat(f.catId)?.kind !== d.v) { f.catId = null; f.subId = null; } refresh(d.form); },
   fCat: d => { const f = forms[d.form]; openCatPicker(f.kind, (c, s) => { f.catId = c; f.subId = s; refresh(d.form); }); },
   pickCat: d => { const c = getCat(d.id); if (!c.subs.length) { const p = picker; closeSheet(); p.onPick(c.id, null); } else { picker.cat = c.id; renderSheets(); } },
+  pickFav: d => { const p = picker; picker = null; closeSheet(); p.onPick(d.id, d.sub || null); },
   pickBack: () => { picker.cat = null; renderSheets(); },
   pickSub: d => { const p = picker; picker = null; closeSheet(); p.onPick(p.cat, d.id || null); },
   fSave: d => {
