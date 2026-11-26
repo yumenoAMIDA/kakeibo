@@ -353,7 +353,7 @@ function detailHTML(f, key) {
     <label class="row"><span class="badge" style="background:var(--line)">📅</span><span class="grow">日付</span><input type="date" value="${esc(f.date)}" data-bind="date" data-form="${key}"></label>
   </div>
   <div class="label">メモ（詳細）</div>
-  <div class="card" style="padding:10px 14px"><textarea class="memo" placeholder="例：おにぎり、豆乳" data-bind="memo" data-form="${key}">${esc(f.memo)}</textarea></div>
+  <div class="card" style="padding:10px 14px"><textarea class="memo" placeholder="メモ" data-bind="memo" data-form="${key}">${esc(f.memo)}</textarea></div>
   <button class="primary" data-act="fSave" data-form="${key}">${f.id ? '保存する' : '記録する'}</button>
   ${f.id ? `<button class="danger" data-act="fDelete" data-form="${key}">この記録を削除</button>` : ''}`;
 }
@@ -751,7 +751,15 @@ const ACT = {
   selDay: d => { ui.selDay = ui.selDay === d.v ? null : d.v; render(); },
   addOnDay: d => { forms.tab = { ...newEntryForm(), kind: forms.tab.kind, date: d.v }; calc.tab.expr = ''; ui.tab = 'entry'; render(); window.scrollTo(0, 0); toast(`${dayLabel(d.v)}の記録を入力`); },
   key: d => { pressKey(d.c, d.k); if (d.c === 'tab') render(); else renderSheets(); },
-  calcCat: () => { const f = forms.tab; openCatPicker(f.kind, (c, s) => { f.catId = c; f.subId = s; render(); }); },
+  calcCat: () => {
+    const f = forms.tab;
+    openCatPicker(f.kind, (c, s) => {
+      f.catId = c; f.subId = s;
+      const v = calcValue('tab');
+      if (isFinite(v) && v > 0) { f.amount = String(v); calc.tab.expr = String(v); render(); openDetail(); }
+      else render();
+    });
+  },
   calcNext: () => {
     const f = forms.tab, v = calcValue('tab');
     if (!isFinite(v) || v <= 0) return toast('金額を入力してください');
